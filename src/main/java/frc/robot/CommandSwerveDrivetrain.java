@@ -18,9 +18,15 @@ import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.math.kinematics.ChassisSpeeds;
 import edu.wpi.first.math.kinematics.SwerveDriveKinematics;
 import edu.wpi.first.math.kinematics.SwerveModulePosition;
+import edu.wpi.first.math.trajectory.TrapezoidProfile;
+import edu.wpi.first.math.trajectory.TrapezoidProfile.Constraints;
+import edu.wpi.first.math.trajectory.TrapezoidProfile.State;
+import edu.wpi.first.units.Measure;
+import edu.wpi.first.units.Velocity;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.Notifier;
 import edu.wpi.first.wpilibj.RobotController;
+import edu.wpi.first.wpilibj.Timer;
 import edu.wpi.first.wpilibj.shuffleboard.BuiltInWidgets;
 import edu.wpi.first.wpilibj.shuffleboard.Shuffleboard;
 import edu.wpi.first.wpilibj2.command.Command;
@@ -80,8 +86,8 @@ public class CommandSwerveDrivetrain extends SwerveDrivetrain implements Subsyst
             (speeds) -> this.setControl(autoRequest.withSpeeds(speeds)),// Method that will drive the robot given ROBOT RELATIVE ChassisSpeeds
             new HolonomicPathFollowerConfig( // HolonomicPathFollowerConfig, this should likely live in your Constants class
                     new PIDConstants(.2, 0.0, 0.0), // Translation PID constants
-                    new PIDConstants(.2, 0.0, 0.2), // Rotation PID constants
-                    .2, // Max module speed, in m/s
+                    new PIDConstants(3, 0.0, 0.2), // Rotation PID constants
+                    3.5, // Max module speed, in m/s
                     0.4, // Drive base radius in meters. Distance from robot center to furthest module.
                     new ReplanningConfig() // Default path replanning config. See the API for the options here
             ),
@@ -104,6 +110,27 @@ public class CommandSwerveDrivetrain extends SwerveDrivetrain implements Subsyst
         return run(() -> this.setControl(requestSupplier.get()));
     }
 
+    public Command SnapToAngle(double newAngle){
+
+        TrapezoidProfile turningProf = new TrapezoidProfile(new Constraints(1, 1), new TrapezoidProfile.State(Math.toRadians(newAngle),0.0), new TrapezoidProfile.State(0,0));;
+        Timer trapezoidTimer = new Timer();
+
+
+        return this.runEnd(() -> {
+            SwerveRequest.RobotCentric drive = new SwerveRequest.RobotCentric();
+            trapezoidTimer.start();
+             this.setControl( drive.withRotationalRate(turningProf.calculate(trapezoidTimer.get()).velocity));
+            System.out.println(turningProf.calculate(trapezoidTimer.get()).velocity);
+        
+        }, () -> {trapezoidTimer.reset();}
+
+          // Drive counterclockwise with negative X (left)
+        
+        
+       ).until( () -> turningProf.totalTime() <= trapezoidTimer.get() );
+
+        }
+
     private void startSimThread() {
         m_lastSimTime = Utils.getCurrentTimeSeconds();
 
@@ -124,7 +151,7 @@ public class CommandSwerveDrivetrain extends SwerveDrivetrain implements Subsyst
     }
 
     public void resetPose(Pose2d pose) {
-        m_pigeon2.setYaw(pose.getRotation().getDegrees());
+        // m_pigeon2.setYaw(pose.getRotation().getDegrees());
         super.m_odometry.resetPosition(pose.getRotation(), m_modulePositions, pose);
     }
     
